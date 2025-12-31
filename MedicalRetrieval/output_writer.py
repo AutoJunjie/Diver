@@ -34,6 +34,7 @@ def write_csv_report(
         writer.writerow([
             "query_id",
             "query_text",
+            "expanded_query",
             "doc_id",
             "doc_title",
             "retrieval_score",
@@ -46,6 +47,7 @@ def write_csv_report(
             writer.writerow([
                 j.query_id,
                 j.query_text,
+                j.expanded_query,
                 j.doc_id,
                 j.doc_title,
                 f"{j.retrieval_score:.6f}",
@@ -131,6 +133,7 @@ def write_debug_outputs(
             {
                 "query_id": j.query_id,
                 "query_text": j.query_text,
+                "expanded_query": j.expanded_query,
                 "doc_id": j.doc_id,
                 "doc_title": j.doc_title,
                 "relevance_score": j.relevance_score,
@@ -291,6 +294,7 @@ if __name__ == "__main__":
         RelevanceJudgment(
             query_id="0",
             query_text="华氏巨球蛋白血症 治疗",
+            expanded_query="华氏巨球蛋白血症 治疗 靶向药物 预后",
             doc_id=123,
             doc_title="华氏巨球蛋白血症的靶向治疗进展",
             relevance_score=2,
@@ -302,6 +306,7 @@ if __name__ == "__main__":
         RelevanceJudgment(
             query_id="0",
             query_text="华氏巨球蛋白血症 治疗",
+            expanded_query="华氏巨球蛋白血症 治疗 靶向药物 预后",
             doc_id=456,
             doc_title="糖尿病合并华氏巨球蛋白血症一例报告",
             relevance_score=1,

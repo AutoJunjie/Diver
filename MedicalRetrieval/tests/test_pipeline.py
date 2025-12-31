@@ -127,6 +127,7 @@ class TestLLMJudge(unittest.TestCase):
         judgment = RelevanceJudgment(
             query_id="0",
             query_text="test query",
+            expanded_query="test query expanded terms",
             doc_id=123,
             doc_title="Test Doc",
             relevance_score=2,
@@ -137,6 +138,7 @@ class TestLLMJudge(unittest.TestCase):
         )
         self.assertEqual(judgment.relevance_score, 2)
         self.assertEqual(judgment.query_id, "0")
+        self.assertEqual(judgment.expanded_query, "test query expanded terms")
 
 
 class TestOpenAIClient(unittest.TestCase):

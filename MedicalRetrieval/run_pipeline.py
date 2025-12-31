@@ -126,12 +126,15 @@ def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs
 
     # LLM Judge evaluation
     print(f"\n[9/8] Evaluating with LLM judge (top {config['eval_top_k']} per query)")
+    # Create mapping of query_id to original query text (use string key for consistency)
+    original_queries_map = {str(q.query_id): q.query_text for q in queries}
     judgments = evaluate_reranked_results(
         reranked_results=reranked_results,
         retrieval_scores=retrieval_scores,
         documents=documents,
         openai_client=openai_client,
-        top_k=config["eval_top_k"]
+        top_k=config["eval_top_k"],
+        original_queries=original_queries_map
     )
     print(f"  Made {len(judgments)} relevance judgments")
 

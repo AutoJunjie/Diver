@@ -138,7 +138,8 @@ Replace NDCG/gold-label evaluation with LLM relevance judgments.
 | Column | Description |
 |--------|-------------|
 | `query_id` | Query identifier (0-19) |
-| `query_text` | The Chinese query text |
+| `query_text` | Original Chinese query text (before expansion) |
+| `expanded_query` | Query text after iterative expansion/rewrite |
 | `doc_id` | Document row index |
 | `doc_title` | Document title |
 | `retrieval_score` | Score from retrieval stage |
