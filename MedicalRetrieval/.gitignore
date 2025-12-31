@@ -1,0 +1,10 @@
+# Cache files
+cache/
+__pycache__/
+*.pyc
+
+# Output files
+output/
+
+# Config with API keys (use config.example.json as template)
+config.json

@@ -1,0 +1,14 @@
+{
+    "openai_api_key": "your-openai-api-key-here",
+    "openai_model": "gpt-4o-mini",
+    "s3_input_path": "s3://your-bucket/path/to/medical_literature.csv",
+    "s3_output_path": "s3://your-bucket/path/to/output/",
+    "retriever_model": "AQ-MedAI/Diver-Retriever-4B",
+    "num_queries": 20,
+    "num_expansion_rounds": 3,
+    "rerank_top_k": 20,
+    "eval_top_k": 10,
+    "bm25_alpha": 0.3,
+    "retry_attempts": 3,
+    "retry_backoff_base": 1.0
+}
