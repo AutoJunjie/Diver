@@ -1,13 +1,16 @@
 """
-Query expansion using OpenAI GPT-4o-mini.
+Query expansion using LLM (OpenAI or Bedrock).
 Implements iterative retrieval-augmented query expansion.
 """
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 from dataclasses import dataclass
 
-from utils import OpenAIClient
+from utils import OpenAIClient, BedrockClient
 from data_loader import Document
 from retriever import HybridRetriever, RetrievalResult
+
+# Type alias for LLM client
+LLMClient = Union[OpenAIClient, BedrockClient]
 
 
 @dataclass
@@ -79,7 +82,7 @@ def format_documents_for_prompt(
 
 
 def expand_query_single_round(
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     query_text: str,
     retrieved_docs: List[Tuple[Document, float]],
     previous_expansion: Optional[str] = None
@@ -88,7 +91,7 @@ def expand_query_single_round(
     Expand a query using retrieved documents.
 
     Args:
-        openai_client: OpenAI client
+        llm_client: LLM client (OpenAIClient or BedrockClient)
         query_text: Original query text
         retrieved_docs: List of (Document, score) tuples
         previous_expansion: Previous expansion result (for iterative expansion)
@@ -110,19 +113,26 @@ def expand_query_single_round(
             documents=docs_text
         )
 
-    response = openai_client.chat_completion(
+    response = llm_client.chat_completion(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.6,
-        max_tokens=200
+        max_tokens=200,
+        n=1
     )
 
-    return response.strip().strip('"\'')
+    # Handle both OpenAI (str) and Bedrock (List[str]) response formats
+    if isinstance(response, list):
+        result = response[0] if response else ""
+    else:
+        result = response
+
+    return result.strip().strip('"\'')
 
 
 def expand_queries_iterative(
     queries: List[Tuple[str, str]],
     retriever: HybridRetriever,
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     num_rounds: int = 3,
     docs_per_round: int = 10
 ) -> List[ExpandedQuery]:
@@ -132,7 +142,7 @@ def expand_queries_iterative(
     Args:
         queries: List of (query_id, query_text) tuples
         retriever: Hybrid retriever for document retrieval
-        openai_client: OpenAI client for expansion
+        llm_client: LLM client for expansion (OpenAIClient or BedrockClient)
         num_rounds: Number of expansion rounds
         docs_per_round: Number of documents to use per round
 
@@ -162,7 +172,7 @@ def expand_queries_iterative(
             # Expand query
             previous = expansion_history[-1] if expansion_history else None
             expanded = expand_query_single_round(
-                openai_client,
+                llm_client,
                 qtext,  # Always use original query as reference
                 top_docs,
                 previous_expansion=previous

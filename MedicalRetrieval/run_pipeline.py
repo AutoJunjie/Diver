@@ -22,13 +22,95 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_loader import load_medical_documents, create_document_index
-from utils import OpenAIClient, load_config, save_json
+from utils import OpenAIClient, BedrockClient, StrandsClient, load_config, save_json
 from query_generator import generate_queries, queries_to_list, queries_to_dict
 from qexpand_openai import expand_queries_iterative, expanded_queries_to_list, expanded_queries_to_dict
 from retriever import HybridRetriever, results_to_dict
 from reranker_openai import rerank_all, rerank_results_to_dict
 from llm_judge import evaluate_reranked_results, compute_evaluation_metrics, identify_zero_relevance_queries
 from output_writer import OutputManager
+
+
+def create_llm_clients(config: dict):
+    """
+    Create LLM clients based on provider configuration.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        Tuple of (llm_client_14b, llm_client_32b) for different model sizes
+        For OpenAI, both will be the same client.
+    """
+    provider = config.get("llm_provider", "openai")
+
+    if provider == "strands":
+        strands_provider = config.get("strands_provider", "bedrock")
+        print(f"  Using Strands Agents SDK (provider: {strands_provider})")
+        print(f"    14B model: {config['strands_model_14b']}")
+        print(f"    32B model: {config['strands_model_32b']}")
+        print(f"    Region: {config.get('strands_region', 'us-west-2')}")
+
+        llm_client_14b = StrandsClient(
+            model_id=config["strands_model_14b"],
+            provider=strands_provider,
+            region=config.get("strands_region", "us-west-2"),
+            temperature=config.get("strands_temperature", 0.7),
+            max_tokens=config.get("strands_max_tokens", 32768),
+            control_thinking=config.get("strands_control_thinking", False),
+            streaming=config.get("strands_streaming", False)
+        )
+
+        llm_client_32b = StrandsClient(
+            model_id=config["strands_model_32b"],
+            provider=strands_provider,
+            region=config.get("strands_region", "us-west-2"),
+            temperature=config.get("strands_temperature", 0.7),
+            max_tokens=config.get("strands_max_tokens", 32768),
+            control_thinking=config.get("strands_control_thinking", False),
+            streaming=config.get("strands_streaming", False)
+        )
+
+        return llm_client_14b, llm_client_32b
+
+    elif provider == "bedrock":
+        print(f"  Using Bedrock provider")
+        print(f"    14B model: {config['bedrock_model_14b']}")
+        print(f"    32B model: {config['bedrock_model_32b']}")
+        print(f"    Region: {config.get('bedrock_region', 'us-west-2')}")
+
+        llm_client_14b = BedrockClient(
+            model_id=config["bedrock_model_14b"],
+            region=config.get("bedrock_region", "us-west-2"),
+            retry_attempts=config.get("retry_attempts", 3),
+            retry_backoff_base=config.get("retry_backoff_base", 1.0),
+            control_thinking=config.get("bedrock_control_thinking", False),
+            max_tokens=config.get("bedrock_max_tokens", 32768)
+        )
+
+        llm_client_32b = BedrockClient(
+            model_id=config["bedrock_model_32b"],
+            region=config.get("bedrock_region", "us-west-2"),
+            retry_attempts=config.get("retry_attempts", 3),
+            retry_backoff_base=config.get("retry_backoff_base", 1.0),
+            control_thinking=config.get("bedrock_control_thinking", False),
+            max_tokens=config.get("bedrock_max_tokens", 32768)
+        )
+
+        return llm_client_14b, llm_client_32b
+
+    else:  # OpenAI
+        print(f"  Using OpenAI provider (model: {config['openai_model']})")
+
+        openai_client = OpenAIClient(
+            api_key=config["openai_api_key"],
+            model=config["openai_model"],
+            retry_attempts=config.get("retry_attempts", 3),
+            retry_backoff_base=config.get("retry_backoff_base", 1.0)
+        )
+
+        # For OpenAI, use the same client for all tasks
+        return openai_client, openai_client
 
 
 def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs: int = None):
@@ -51,14 +133,9 @@ def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs
     print(f"\n[1/8] Loading configuration from {config_full_path}")
     config = load_config(str(config_full_path))
 
-    # Initialize OpenAI client
-    print(f"\n[2/8] Initializing OpenAI client (model: {config['openai_model']})")
-    openai_client = OpenAIClient(
-        api_key=config["openai_api_key"],
-        model=config["openai_model"],
-        retry_attempts=config.get("retry_attempts", 3),
-        retry_backoff_base=config.get("retry_backoff_base", 1.0)
-    )
+    # Initialize LLM clients
+    print(f"\n[2/8] Initializing LLM clients")
+    llm_client_14b, llm_client_32b = create_llm_clients(config)
 
     # Load documents from S3
     print(f"\n[3/8] Loading documents from S3")
@@ -83,22 +160,22 @@ def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs
         bm25_alpha=config.get("bm25_alpha", 0.3)
     )
 
-    # Generate synthetic queries
+    # Generate synthetic queries (use 14B model)
     print(f"\n[5/8] Generating {config['num_queries']} synthetic queries")
     queries = generate_queries(
         documents=documents,
-        openai_client=openai_client,
+        llm_client=llm_client_14b,
         num_queries=config["num_queries"]
     )
     query_list = queries_to_list(queries)
     print(f"  Generated {len(queries)} queries")
 
-    # Query expansion (iterative)
+    # Query expansion (iterative, use 14B model)
     print(f"\n[6/8] Expanding queries ({config['num_expansion_rounds']} rounds)")
     expanded_queries = expand_queries_iterative(
         queries=query_list,
         retriever=retriever,
-        openai_client=openai_client,
+        llm_client=llm_client_14b,
         num_rounds=config["num_expansion_rounds"]
     )
     expanded_query_list = expanded_queries_to_list(expanded_queries)
@@ -113,18 +190,18 @@ def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs
     retrieval_scores = results_to_dict(retrieval_results)
     print(f"  Retrieved candidates for {len(retrieval_results)} queries")
 
-    # Reranking
+    # Reranking (use 32B model)
     print(f"\n[8/8] Reranking top {config['rerank_top_k']} candidates per query")
     reranked_results = rerank_all(
         retrieval_results=retrieval_results,
         documents=documents,
-        openai_client=openai_client,
+        llm_client=llm_client_32b,
         top_k=config["rerank_top_k"]
     )
     rerank_scores = rerank_results_to_dict(reranked_results)
     print(f"  Reranked {len(reranked_results)} queries")
 
-    # LLM Judge evaluation
+    # LLM Judge evaluation (use 32B model)
     print(f"\n[9/8] Evaluating with LLM judge (top {config['eval_top_k']} per query)")
     # Create mapping of query_id to original query text (use string key for consistency)
     original_queries_map = {str(q.query_id): q.query_text for q in queries}
@@ -132,7 +209,7 @@ def run_pipeline(config_path: str = "config.json", debug: bool = False, max_docs
         reranked_results=reranked_results,
         retrieval_scores=retrieval_scores,
         documents=documents,
-        openai_client=openai_client,
+        llm_client=llm_client_32b,
         top_k=config["eval_top_k"],
         original_queries=original_queries_map
     )

@@ -10,6 +10,48 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Mock external dependencies before importing modules
+# This allows tests to run without all packages installed
+if 'numpy' not in sys.modules:
+    mock_numpy = MagicMock()
+    mock_numpy.ndarray = MagicMock
+    mock_numpy.array = MagicMock(return_value=[])
+    mock_numpy.float32 = float
+    sys.modules['numpy'] = mock_numpy
+if 'openai' not in sys.modules:
+    sys.modules['openai'] = MagicMock()
+if 'boto3' not in sys.modules:
+    sys.modules['boto3'] = MagicMock()
+if 'sentence_transformers' not in sys.modules:
+    sys.modules['sentence_transformers'] = MagicMock()
+if 'rank_bm25' not in sys.modules:
+    sys.modules['rank_bm25'] = MagicMock()
+if 'jieba' not in sys.modules:
+    sys.modules['jieba'] = MagicMock()
+if 'transformers' not in sys.modules:
+    sys.modules['transformers'] = MagicMock()
+if 'torch' not in sys.modules:
+    mock_torch = MagicMock()
+    mock_torch.Tensor = MagicMock
+    mock_torch.cuda = MagicMock()
+    mock_torch.cuda.is_available = MagicMock(return_value=False)
+    sys.modules['torch'] = mock_torch
+if 'torch.nn' not in sys.modules:
+    sys.modules['torch.nn'] = MagicMock()
+if 'torch.nn.functional' not in sys.modules:
+    sys.modules['torch.nn.functional'] = MagicMock()
+if 'tqdm' not in sys.modules:
+    mock_tqdm = MagicMock()
+    mock_tqdm.tqdm = lambda x, **kwargs: x
+    mock_tqdm.trange = lambda x, **kwargs: range(x)
+    sys.modules['tqdm'] = mock_tqdm
+if 'sklearn' not in sys.modules:
+    sys.modules['sklearn'] = MagicMock()
+if 'sklearn.metrics' not in sys.modules:
+    sys.modules['sklearn.metrics'] = MagicMock()
+if 'sklearn.metrics.pairwise' not in sys.modules:
+    sys.modules['sklearn.metrics.pairwise'] = MagicMock()
+
 from data_loader import Document, parse_keywords, create_document_index
 from utils import OpenAIClient, cluster_documents_by_keywords, compute_llm_judge_metrics
 from query_generator import Query, queries_to_list, queries_to_dict
