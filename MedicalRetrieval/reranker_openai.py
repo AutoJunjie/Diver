@@ -1,15 +1,18 @@
 """
-Reranker using OpenAI GPT-4o-mini.
+Reranker using LLM (OpenAI or Bedrock).
 Implements listwise reranking of retrieved documents.
 """
 import re
 import json
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 from dataclasses import dataclass
 
-from utils import OpenAIClient
+from utils import OpenAIClient, BedrockClient
 from data_loader import Document
 from retriever import RetrievalResult
+
+# Type alias for LLM client
+LLMClient = Union[OpenAIClient, BedrockClient]
 
 
 @dataclass
@@ -109,7 +112,7 @@ def parse_rerank_response(response: str, num_docs: int) -> List[int]:
 
 
 def rerank_documents(
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     query_id: str,
     query_text: str,
     docs_with_scores: List[Tuple[Document, float]],
@@ -119,7 +122,7 @@ def rerank_documents(
     Rerank documents using LLM.
 
     Args:
-        openai_client: OpenAI client
+        llm_client: LLM client (OpenAIClient or BedrockClient)
         query_id: Query identifier
         query_text: Query text
         docs_with_scores: List of (Document, score) tuples from retrieval
@@ -140,11 +143,16 @@ def rerank_documents(
     )
 
     try:
-        response = openai_client.chat_completion(
+        response = llm_client.chat_completion(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=500
+            max_tokens=500,
+            n=1
         )
+
+        # Handle both OpenAI (str) and Bedrock (List[str]) response formats
+        if isinstance(response, list):
+            response = response[0] if response else ""
 
         # Parse ranking
         ranking = parse_rerank_response(response, len(docs_to_rerank))
@@ -180,7 +188,7 @@ def rerank_documents(
 def rerank_all(
     retrieval_results: List[RetrievalResult],
     documents: List[Document],
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     top_k: int = 20
 ) -> List[RerankResult]:
     """
@@ -189,7 +197,7 @@ def rerank_all(
     Args:
         retrieval_results: List of retrieval results
         documents: List of all documents
-        openai_client: OpenAI client
+        llm_client: LLM client (OpenAIClient or BedrockClient)
         top_k: Number of documents to rerank per query
 
     Returns:
@@ -212,7 +220,7 @@ def rerank_all(
 
         # Rerank
         reranked = rerank_documents(
-            openai_client,
+            llm_client,
             result.query_id,
             result.query_text,
             docs_with_scores,

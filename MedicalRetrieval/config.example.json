@@ -1,6 +1,24 @@
 {
+    "llm_provider": "openai",
+
     "openai_api_key": "your-openai-api-key-here",
     "openai_model": "gpt-4o-mini",
+
+    "bedrock_model_14b": "deepseek.r1-distill-qwen-14b",
+    "bedrock_model_32b": "deepseek.r1-distill-qwen-32b",
+    "bedrock_region": "us-west-2",
+    "bedrock_max_tokens": 32768,
+    "bedrock_control_thinking": false,
+
+    "strands_provider": "bedrock",
+    "strands_model_14b": "us.deepseek.r1-distill-qwen-14b",
+    "strands_model_32b": "us.deepseek.r1-distill-qwen-32b",
+    "strands_region": "us-west-2",
+    "strands_max_tokens": 32768,
+    "strands_temperature": 0.7,
+    "strands_control_thinking": false,
+    "strands_streaming": false,
+
     "s3_input_path": "s3://your-bucket/path/to/medical_literature.csv",
     "s3_output_path": "s3://your-bucket/path/to/output/",
     "retriever_model": "AQ-MedAI/Diver-Retriever-4B",

@@ -7,7 +7,10 @@ from typing import List, Dict, Tuple
 from dataclasses import dataclass
 
 from data_loader import Document
-from utils import OpenAIClient, cluster_documents_by_keywords, select_diverse_clusters
+from utils import OpenAIClient, BedrockClient, cluster_documents_by_keywords, select_diverse_clusters
+
+# Type alias for LLM client (can be OpenAIClient or BedrockClient)
+LLMClient = OpenAIClient | BedrockClient
 
 
 @dataclass
@@ -37,7 +40,7 @@ QUERY_GENERATION_PROMPT = """你是一个医学文献检索专家。基于以下
 
 def generate_queries(
     documents: List[Document],
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     num_queries: int = 20,
     min_cluster_size: int = 10,
     docs_per_sample: int = 3
@@ -47,7 +50,7 @@ def generate_queries(
 
     Args:
         documents: List of Document objects
-        openai_client: OpenAI client for query generation
+        llm_client: LLM client for query generation (OpenAIClient or BedrockClient)
         num_queries: Number of queries to generate
         min_cluster_size: Minimum documents per keyword cluster
         docs_per_sample: Number of sample documents to show in prompt
@@ -96,11 +99,18 @@ def generate_queries(
         )
 
         try:
-            query_text = openai_client.chat_completion(
+            response = llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=100
-            ).strip()
+                max_tokens=100,
+                n=1  # Only need one response for query generation
+            )
+
+            # Handle both OpenAI (str) and Bedrock (List[str]) response formats
+            if isinstance(response, list):
+                query_text = response[0].strip() if response else ""
+            else:
+                query_text = response.strip()
 
             # Clean up query text (remove quotes if present)
             query_text = query_text.strip('"\'')

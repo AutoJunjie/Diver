@@ -3,19 +3,23 @@ LLM-as-a-Judge evaluation for relevance assessment.
 Uses 3-point scale: Not relevant (0), Partially relevant (1), Highly relevant (2).
 """
 import json
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 from dataclasses import dataclass
 
-from utils import OpenAIClient, compute_llm_judge_metrics
+from utils import OpenAIClient, BedrockClient, compute_llm_judge_metrics
 from data_loader import Document
 from reranker_openai import RerankResult
+
+# Type alias for LLM client
+LLMClient = Union[OpenAIClient, BedrockClient]
 
 
 @dataclass
 class RelevanceJudgment:
     """Represents a single relevance judgment."""
     query_id: str
-    query_text: str
+    query_text: str  # Original query before expansion
+    expanded_query: str  # Query after expansion/rewrite
     doc_id: int
     doc_title: str
     relevance_score: int  # 0, 1, or 2
@@ -86,7 +90,7 @@ def parse_judgment_response(response: str) -> Tuple[int, str]:
 
 
 def judge_single_document(
-    openai_client: OpenAIClient,
+    llm_client: LLMClient,
     query_text: str,
     document: Document
 ) -> Tuple[int, str]:
@@ -94,7 +98,7 @@ def judge_single_document(
     Judge relevance of a single document to a query.
 
     Args:
-        openai_client: OpenAI client
+        llm_client: LLM client (OpenAIClient or BedrockClient)
         query_text: Query text
         document: Document to judge
 
@@ -110,11 +114,16 @@ def judge_single_document(
         keywords=keywords_str
     )
 
-    response = openai_client.chat_completion(
+    response = llm_client.chat_completion(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        max_tokens=200
+        max_tokens=200,
+        n=1
     )
+
+    # Handle both OpenAI (str) and Bedrock (List[str]) response formats
+    if isinstance(response, list):
+        response = response[0] if response else ""
 
     return parse_judgment_response(response)
 
@@ -123,8 +132,9 @@ def evaluate_reranked_results(
     reranked_results: List[RerankResult],
     retrieval_scores: Dict[str, Dict[int, float]],
     documents: List[Document],
-    openai_client: OpenAIClient,
-    top_k: int = 10
+    llm_client: LLMClient,
+    top_k: int = 10,
+    original_queries: Optional[Dict[str, str]] = None
 ) -> List[RelevanceJudgment]:
     """
     Evaluate reranked results using LLM judge.
@@ -133,8 +143,9 @@ def evaluate_reranked_results(
         reranked_results: List of reranked results
         retrieval_scores: Original retrieval scores {query_id: {doc_id: score}}
         documents: List of all documents
-        openai_client: OpenAI client
+        llm_client: LLM client (OpenAIClient or BedrockClient)
         top_k: Number of top documents to evaluate per query
+        original_queries: Optional dict mapping query_id to original query text
 
     Returns:
         List of RelevanceJudgment objects
@@ -142,10 +153,16 @@ def evaluate_reranked_results(
     # Create document index
     doc_index = {d.doc_id: d for d in documents}
 
+    # Default to empty dict if not provided
+    original_queries = original_queries or {}
+
     all_judgments = []
 
     for result in reranked_results:
         print(f"\nEvaluating query {result.query_id}: {result.query_text[:50]}...")
+
+        # Get original query (before expansion)
+        original_query = original_queries.get(result.query_id, result.query_text)
 
         # Get top-k documents by rerank score
         sorted_docs = sorted(
@@ -168,14 +185,15 @@ def evaluate_reranked_results(
 
             # Judge relevance
             relevance_score, explanation = judge_single_document(
-                openai_client,
+                llm_client,
                 result.query_text,
                 doc
             )
 
             judgment = RelevanceJudgment(
                 query_id=result.query_id,
-                query_text=result.query_text,
+                query_text=original_query,
+                expanded_query=result.query_text,
                 doc_id=doc_id,
                 doc_title=doc.title,
                 relevance_score=relevance_score,
